@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "title": "Duck Image",
+      "image": "https://images.example.com/duck.jpg",
+      "thumbnail": "https://images.example.com/duck-thumb.jpg",
+      "url": "https://example.com/duck-image",
+      "source": "Example"
+    }
+  ],
+  "next": "/i.js?q=duck&s=1"
+}
