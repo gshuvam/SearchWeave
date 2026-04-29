@@ -1,14 +1,18 @@
 # Releasing SearchWeave
 
-This repository publishes three packages from Git tags:
+This repository now uses one umbrella release tag for all packages.
 
-- npm: `@searchweave/client` via `.github/workflows/publish-npm-client.yml`
-- npm: `@searchweave/cli` via `.github/workflows/publish-npm-cli.yml`
-- PyPI: `searchweave` via `.github/workflows/publish-py.yml`
+Tag format:
 
-It also auto-creates a GitHub Release entry for the same tags via:
+- `vX.Y.Z`
 
-- `.github/workflows/create-github-release.yml`
+A single `vX.Y.Z` tag triggers:
+
+- npm publish: `@searchweave/client` via `.github/workflows/publish-npm-client.yml`
+- npm publish: `@searchweave/cli` via `.github/workflows/publish-npm-cli.yml`
+- PyPI publish: `searchweave` via `.github/workflows/publish-py.yml`
+- GitHub Release create/update via `.github/workflows/create-github-release.yml`
+- Windows CLI asset upload: `searchweave-cli-X.Y.Z-windows-x64.exe`
 
 ## 1. One-time setup
 
@@ -48,67 +52,55 @@ python -m pip install --upgrade build
 python -m build python/searchweave-py
 ```
 
-## 3. Release by tags
+## 3. Release by tag
 
-Use semantic versions (`X.Y.Z`).
-
-### 3.1 Release `@searchweave/client`
+Use semantic versions (`X.Y.Z`) and push one tag:
 
 ```bash
-git tag npm-client-vX.Y.Z
-git push origin npm-client-vX.Y.Z
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-This also creates/updates a GitHub Release for `npm-client-vX.Y.Z`.
-
-### 3.2 Release `@searchweave/cli`
-
-```bash
-git tag npm-cli-vX.Y.Z
-git push origin npm-cli-vX.Y.Z
-```
-
-This also creates/updates a GitHub Release for `npm-cli-vX.Y.Z`.
-
-### 3.3 Release `searchweave` (PyPI)
-
-```bash
-git tag py-vX.Y.Z
-git push origin py-vX.Y.Z
-```
-
-This also creates/updates a GitHub Release for `py-vX.Y.Z`.
+This publishes all three packages and updates one GitHub Release (`vX.Y.Z`) with the CLI `.exe` asset.
 
 ## 4. What the workflows do
 
-- npm workflows:
-  - Read version from tag (`npm-client-v*` or `npm-cli-v*`)
-  - Set package version in workspace package without committing
-  - Run package tests
-  - Run `npm pack --dry-run`
-  - Publish with `npm publish --provenance --access public`
+- `.github/workflows/publish-npm-client.yml`
+  - Reads version from `v*` tag
+  - Sets workspace package version without committing
+  - Runs tests + `npm pack --dry-run`
+  - Publishes `@searchweave/client`
 
-- PyPI workflow:
-  - Reads version from `py-v*` tag
+- `.github/workflows/publish-npm-cli.yml`
+  - Reads version from `v*` tag
+  - Sets workspace package version without committing
+  - Runs tests + `npm pack --dry-run`
+  - Publishes `@searchweave/cli`
+
+- `.github/workflows/publish-py.yml`
+  - Reads version from `v*` tag
   - Rewrites `version = "..."` in `python/searchweave-py/pyproject.toml` for the run
   - Runs Python tests
-  - Builds with `python -m build python/searchweave-py`
-  - Publishes via `pypa/gh-action-pypi-publish`
+  - Builds and publishes `searchweave` to PyPI
+
+- `.github/workflows/create-github-release.yml`
+  - Creates/updates one release for the same `v*` tag
+  - Builds Windows CLI executable
+  - Uploads `searchweave-cli-X.Y.Z-windows-x64.exe` as a release asset
 
 ## 5. Verify release
 
-1. Open GitHub Actions and confirm the publish workflow run succeeded.
+1. Open GitHub Actions and confirm all publish workflows succeeded.
 2. Check package registries:
-   - npm: `@searchweave/client` and/or `@searchweave/cli`
+   - npm: `@searchweave/client`
+   - npm: `@searchweave/cli`
    - PyPI: `searchweave`
-3. Install-test quickly:
+3. Check GitHub Release `vX.Y.Z` includes the `.exe` asset.
+4. Install-test quickly:
 
 ```bash
 npm view @searchweave/client version
 npm view @searchweave/cli version
-```
-
-```bash
 python -m pip index versions searchweave
 ```
 
@@ -128,11 +120,9 @@ python -m pip index versions searchweave
     - workflow filename
     - branch/tag permissions in GitHub repo settings
 
-## 7. Tag examples
+## 7. Tag example
 
 ```bash
-git tag npm-client-v0.1.0
-git tag npm-cli-v0.1.0
-git tag py-v0.1.0
-git push origin npm-client-v0.1.0 npm-cli-v0.1.0 py-v0.1.0
+git tag v0.1.0
+git push origin v0.1.0
 ```

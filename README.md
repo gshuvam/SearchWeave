@@ -122,10 +122,12 @@ searchweave-py search --q "vercel" --engine duckduckgo,bing --limit 10
 
 ## CI and release tags
 
-GitHub workflows publish packages from tags:
+GitHub workflows publish all packages from one tag format:
 
-- `npm-client-vX.Y.Z` -> `@searchweave/client`
-- `npm-cli-vX.Y.Z` -> `@searchweave/cli`
-- `py-vX.Y.Z` -> `searchweave` (PyPI)
+- `vX.Y.Z` -> `@searchweave/client`, `@searchweave/cli`, and `searchweave` (PyPI)
+
+The same tag also creates/updates a single GitHub Release and attaches:
+
+- `searchweave-cli-X.Y.Z-windows-x64.exe`
 
 The workflows are set up for trusted publishing (OIDC) with npm and PyPI.

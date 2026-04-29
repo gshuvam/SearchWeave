@@ -3,7 +3,7 @@ name: Publish Python package
 on:
   push:
     tags:
-      - "py-v*"
+      - "v*"
 
 jobs:
   publish:
@@ -25,7 +25,7 @@ jobs:
         run: python -m pip install --upgrade pip build
 
       - name: Derive version from tag
-        run: echo "VERSION=${GITHUB_REF_NAME#py-v}" >> "$GITHUB_ENV"
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
       - name: Apply version to pyproject.toml
         run: |

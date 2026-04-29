@@ -3,7 +3,7 @@ name: Publish npm cli
 on:
   push:
     tags:
-      - "npm-cli-v*"
+      - "v*"
 
 jobs:
   publish:
@@ -27,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Derive version from tag
-        run: echo "VERSION=${GITHUB_REF_NAME#npm-cli-v}" >> "$GITHUB_ENV"
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
       - name: Set package version
         working-directory: packages/cli
