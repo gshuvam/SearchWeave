@@ -41,4 +41,5 @@ dev-server*.log
 *.tsbuildinfo
 next-env.d.ts
 
-.md
+AGENTS.md
+CLAUDE.md
