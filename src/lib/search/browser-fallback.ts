@@ -276,7 +276,7 @@ async function waitForAbortSignal(
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let removeAbortListener = () => undefined;
+  let removeAbortListener: () => void = () => {};
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     const onAbort = () => {
