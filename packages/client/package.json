@@ -20,6 +20,15 @@
     "sdk",
     "search"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gshuvam/SearchWeave.git",
+    "directory": "packages/client"
+  },
+  "bugs": {
+    "url": "https://github.com/gshuvam/SearchWeave/issues"
+  },
+  "homepage": "https://github.com/gshuvam/SearchWeave/tree/main/packages/client#readme",
   "engines": {
     "node": ">=20.9.0"
   },

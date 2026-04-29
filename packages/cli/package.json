@@ -4,7 +4,7 @@
   "description": "SearchWeave command line interface.",
   "type": "module",
   "bin": {
-    "searchweave": "./bin/searchweave.js"
+    "searchweave": "bin/searchweave.js"
   },
   "main": "./src/main.js",
   "files": [
@@ -19,6 +19,15 @@
   "dependencies": {
     "@searchweave/client": "^0.1.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gshuvam/SearchWeave.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/gshuvam/SearchWeave/issues"
+  },
+  "homepage": "https://github.com/gshuvam/SearchWeave/tree/main/packages/cli#readme",
   "engines": {
     "node": ">=20.9.0"
   },
