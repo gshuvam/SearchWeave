@@ -13,6 +13,7 @@ export type SearchType = (typeof SEARCH_TYPES)[number];
 export type SearchWarningCode =
   | "blocked"
   | "fetch_error"
+  | "partial_results"
   | "parse_error"
   | "timeout"
   | "unknown_error";
@@ -45,6 +46,7 @@ export type SearchWarning = {
   code: SearchWarningCode;
   message: string;
   status?: number;
+  details?: Record<string, string | number | boolean>;
 };
 
 export type ParsedSearchRequest = {
@@ -52,6 +54,7 @@ export type ParsedSearchRequest = {
   type: SearchType;
   engines: SearchEngine[];
   limit: number;
+  googleCookie?: string;
 };
 
 export type ScrapeContext = {
@@ -61,6 +64,11 @@ export type ScrapeContext = {
   deadline: number;
   userAgent: string;
   fetcher?: typeof fetch;
+  googleCookie?: string;
+  browserFallbackEnabled?: boolean;
+  browserTimeoutMs?: number;
+  interactiveCaptchaEnabled?: boolean;
+  interactiveCaptchaTimeoutMs?: number;
 };
 
 export type AdapterSearchResponse = {

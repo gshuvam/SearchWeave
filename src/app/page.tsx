@@ -18,6 +18,33 @@ const engines = [
 ] as const;
 
 type SearchType = "text" | "image";
+type SearchApiError = {
+  code?: string;
+  details?: Record<string, unknown>;
+};
+
+type SearchApiPayload = {
+  elapsedMs?: number;
+  returned?: number;
+  results?: unknown[];
+  captcha_required?: boolean;
+  captchaUrl?: string | null;
+  errors?: SearchApiError[];
+};
+
+type FormFieldKey =
+  | "query"
+  | "engines"
+  | "limit"
+  | "apiKey"
+  | "googleCookie";
+type FormErrors = Partial<Record<FormFieldKey, string>>;
+
+const loadingMessages = [
+  "Collecting signals",
+  "Blending engine responses",
+  "Formatting output JSON",
+] as const;
 
 /* ─── Syntax-highlighted JSON renderer ─── */
 function SyntaxHighlightedJson({ json }: { json: string }) {
@@ -105,7 +132,16 @@ export default function Home() {
   const [status, setStatus] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [resultCount, setResultCount] = useState<number | null>(null);
+  const [captchaUrl, setCaptchaUrl] = useState<string | null>(null);
+  const [googleCookie, setGoogleCookie] = useState("");
+  const [isWaitingForCaptcha, setIsWaitingForCaptcha] = useState(false);
+  const [isRetryingCaptcha, setIsRetryingCaptcha] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const responseRef = useRef<HTMLDivElement>(null);
+  const captchaWindowRef = useRef<Window | null>(null);
+  const captchaPollRef = useRef<number | null>(null);
+  const googleCookieRef = useRef("");
   const [responseJson, setResponseJson] = useState(
     JSON.stringify(
       {
@@ -136,6 +172,7 @@ export default function Home() {
     [selectedEngines],
   );
   const activeEngineCount = selectedEngines.length;
+  const hasFormErrors = Object.keys(formErrors).length > 0;
 
   const toggleEngine = useCallback((engine: string) => {
     setSelectedEngines((current) => {
@@ -146,15 +183,35 @@ export default function Home() {
       }
       return [...current, engine];
     });
+    setFormErrors((current) => {
+      if (!current.engines) {
+        return current;
+      }
+      const next = { ...current };
+      delete next.engines;
+      return next;
+    });
   }, []);
 
-  async function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsLoading(true);
-    setStatus(null);
-    setElapsedMs(null);
-    setResultCount(null);
+  const clearFieldError = useCallback((field: FormFieldKey) => {
+    setFormErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }, []);
 
+  const clearCaptchaPolling = useCallback(() => {
+    if (captchaPollRef.current !== null) {
+      window.clearInterval(captchaPollRef.current);
+      captchaPollRef.current = null;
+    }
+  }, []);
+
+  function buildSearchParams() {
     const params = new URLSearchParams({
       q: query,
       type,
@@ -164,6 +221,94 @@ export default function Home() {
     if (limit.trim()) {
       params.set("limit", limit.trim());
     }
+    if (googleCookie.trim()) {
+      params.set("google_cookie", googleCookie.trim());
+    }
+
+    return params;
+  }
+
+  function extractCaptchaUrl(payload: SearchApiPayload) {
+    if (payload.captcha_required && typeof payload.captchaUrl === "string") {
+      return payload.captchaUrl;
+    }
+
+    const fallbackCaptchaUrl = payload.errors?.find((error) => {
+      return (
+        error.code === "blocked" &&
+        error.details !== undefined &&
+        typeof error.details.captchaUrl === "string"
+      );
+    })?.details?.captchaUrl;
+
+    return typeof fallbackCaptchaUrl === "string" ? fallbackCaptchaUrl : null;
+  }
+
+  function validateSearchForm() {
+    const nextErrors: FormErrors = {};
+
+    if (!query.trim()) {
+      nextErrors.query = "Enter a query to run the search.";
+    }
+
+    if (selectedEngines.length === 0) {
+      nextErrors.engines = "Select at least one search engine.";
+    }
+
+    if (!apiKey.trim()) {
+      nextErrors.apiKey = "API key is required.";
+    }
+
+    const trimmedLimit = limit.trim();
+    if (trimmedLimit) {
+      const parsedLimit = Number(trimmedLimit);
+      if (
+        !Number.isInteger(parsedLimit) ||
+        parsedLimit < 1 ||
+        parsedLimit > 100
+      ) {
+        nextErrors.limit = "Limit must be a whole number between 1 and 100.";
+      }
+    }
+
+    setFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  function validateCaptchaCookie() {
+    const trimmedCookie = googleCookie.trim();
+    if (!trimmedCookie) {
+      setFormErrors((current) => ({
+        ...current,
+        googleCookie: "Paste your solved Google cookie string first.",
+      }));
+      return false;
+    }
+
+    if (!/[A-Za-z0-9_\-]+=/.test(trimmedCookie)) {
+      setFormErrors((current) => ({
+        ...current,
+        googleCookie:
+          "Cookie format looks invalid. Example: NID=...; 1P_JAR=...",
+      }));
+      return false;
+    }
+
+    clearFieldError("googleCookie");
+    return true;
+  }
+
+  async function runSearch(options: { captchaRetry?: boolean } = {}) {
+    setLoadingStep(0);
+    setIsLoading(true);
+    if (options.captchaRetry) {
+      setIsRetryingCaptcha(true);
+    }
+    setStatus(null);
+    setElapsedMs(null);
+    setResultCount(null);
+
+    const params = buildSearchParams();
 
     try {
       const response = await fetch(`/api/search?${params.toString()}`, {
@@ -171,13 +316,22 @@ export default function Home() {
           Authorization: `Bearer ${apiKey}`,
         },
       });
-      const payload = await response.json();
+      const payload = (await response.json()) as SearchApiPayload;
+      const nextCaptchaUrl = extractCaptchaUrl(payload);
+      setCaptchaUrl(nextCaptchaUrl);
+      if (!nextCaptchaUrl) {
+        setIsWaitingForCaptcha(false);
+        clearCaptchaPolling();
+      }
       setStatus(`${response.status} ${response.statusText || "Response"}`);
       setElapsedMs(payload.elapsedMs ?? null);
       setResultCount(payload.returned ?? payload.results?.length ?? null);
       setResponseJson(JSON.stringify(payload, null, 2));
       setCopied(false);
     } catch (error) {
+      setCaptchaUrl(null);
+      setIsWaitingForCaptcha(false);
+      clearCaptchaPolling();
       setStatus("Request failed");
       setResponseJson(
         JSON.stringify(
@@ -193,7 +347,59 @@ export default function Home() {
       );
     } finally {
       setIsLoading(false);
+      if (options.captchaRetry) {
+        setIsRetryingCaptcha(false);
+      }
     }
+  }
+
+  async function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!validateSearchForm()) {
+      setStatus("Fix the highlighted fields and run search again.");
+      return;
+    }
+    await runSearch();
+  }
+
+  async function retryAfterCaptcha() {
+    if (!validateCaptchaCookie()) {
+      setStatus("Paste your solved Google cookie string, then retry verification.");
+      return;
+    }
+    await runSearch({ captchaRetry: true });
+  }
+
+  function openCaptchaChallenge() {
+    if (!captchaUrl) {
+      return;
+    }
+
+    const popup = window.open(captchaUrl, "_blank", "noopener,noreferrer");
+    if (!popup) {
+      setStatus("Popup blocked by browser. Please allow popups and try again.");
+      return;
+    }
+
+    captchaWindowRef.current = popup;
+    setIsWaitingForCaptcha(true);
+    clearCaptchaPolling();
+    popup.focus();
+
+    captchaPollRef.current = window.setInterval(() => {
+      if (!captchaWindowRef.current || captchaWindowRef.current.closed) {
+        clearCaptchaPolling();
+        captchaWindowRef.current = null;
+        setIsWaitingForCaptcha(false);
+        if (googleCookieRef.current.trim()) {
+          void retryAfterCaptcha();
+          return;
+        }
+        setStatus(
+          "CAPTCHA tab closed. Paste your solved Google cookie string, then click I've Completed Verification.",
+        );
+      }
+    }, 1200);
   }
 
   async function copyResponseJson() {
@@ -214,6 +420,30 @@ export default function Home() {
       responseRef.current.scrollTop = 0;
     }
   }, [responseJson]);
+
+  useEffect(() => {
+    googleCookieRef.current = googleCookie;
+  }, [googleCookie]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setLoadingStep((current) => (current + 1) % loadingMessages.length);
+    }, 900);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isLoading]);
+
+  useEffect(() => {
+    return () => {
+      clearCaptchaPolling();
+    };
+  }, [clearCaptchaPolling]);
 
   return (
     <main className="relative min-h-screen overflow-hidden" style={{ background: "hsl(222 47% 5%)" }}>
@@ -341,6 +571,7 @@ export default function Home() {
           {/* ═══ LEFT: Request Builder ═══ */}
           <form
             onSubmit={submitSearch}
+            noValidate
             className="animate-fade-up flex flex-col gap-6 rounded-2xl border glass p-7"
             style={{
               borderColor: "hsl(var(--accent-cyan) / 0.1)",
@@ -364,6 +595,17 @@ export default function Home() {
               </h2>
             </div>
 
+            {hasFormErrors && (
+              <div className="field-error-panel animate-fade-in">
+                <p className="field-error-panel-title">Fix these issues before running:</p>
+                <ul className="field-error-list">
+                  {Object.values(formErrors).map((message) => (
+                    message ? <li key={message}>{message}</li> : null
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* Query input */}
             <label className="flex flex-col gap-3">
               <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(var(--fg-muted))" }}>
@@ -371,15 +613,27 @@ export default function Home() {
               </span>
               <input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="input-glow h-11 rounded-xl border px-4 text-sm text-white outline-none"
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  clearFieldError("query");
+                }}
+                className={`input-glow h-11 rounded-xl border px-4 text-sm text-white outline-none ${
+                  formErrors.query ? "input-invalid" : ""
+                }`}
                 style={{
                   background: "hsl(var(--input-bg))",
                   borderColor: "hsl(var(--border-color) / 0.5)",
                 }}
                 placeholder="Enter search keyword..."
                 required
+                aria-invalid={formErrors.query ? true : undefined}
+                aria-describedby={formErrors.query ? "query-error" : undefined}
               />
+              {formErrors.query && (
+                <p id="query-error" className="field-error animate-fade-in">
+                  {formErrors.query}
+                </p>
+              )}
             </label>
 
             {/* Search type toggle */}
@@ -470,6 +724,11 @@ export default function Home() {
                   );
                 })}
               </div>
+              {formErrors.engines && (
+                <p id="engines-error" className="field-error animate-fade-in">
+                  {formErrors.engines}
+                </p>
+              )}
             </fieldset>
 
             {/* Limit + API Key row */}
@@ -480,8 +739,13 @@ export default function Home() {
                 </span>
                 <input
                   value={limit}
-                  onChange={(e) => setLimit(e.target.value)}
-                  className="input-glow h-11 rounded-xl border px-4 text-sm text-white outline-none"
+                  onChange={(e) => {
+                    setLimit(e.target.value);
+                    clearFieldError("limit");
+                  }}
+                  className={`input-glow h-11 rounded-xl border px-4 text-sm text-white outline-none ${
+                    formErrors.limit ? "input-invalid" : ""
+                  }`}
                   style={{
                     background: "hsl(var(--input-bg))",
                     borderColor: "hsl(var(--border-color) / 0.5)",
@@ -489,7 +753,14 @@ export default function Home() {
                   inputMode="numeric"
                   min="1"
                   type="number"
+                  aria-invalid={formErrors.limit ? true : undefined}
+                  aria-describedby={formErrors.limit ? "limit-error" : undefined}
                 />
+                {formErrors.limit && (
+                  <p id="limit-error" className="field-error animate-fade-in">
+                    {formErrors.limit}
+                  </p>
+                )}
               </label>
               <label className="flex flex-col gap-3">
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(var(--fg-muted))" }}>
@@ -497,8 +768,13 @@ export default function Home() {
                 </span>
                 <input
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="input-glow h-11 rounded-xl border px-4 text-sm text-white outline-none"
+                  onChange={(e) => {
+                    setApiKey(e.target.value);
+                    clearFieldError("apiKey");
+                  }}
+                  className={`input-glow h-11 rounded-xl border px-4 text-sm text-white outline-none ${
+                    formErrors.apiKey ? "input-invalid" : ""
+                  }`}
                   style={{
                     background: "hsl(var(--input-bg))",
                     borderColor: "hsl(var(--border-color) / 0.5)",
@@ -506,7 +782,14 @@ export default function Home() {
                   placeholder="API Key"
                   type="password"
                   required
+                  aria-invalid={formErrors.apiKey ? true : undefined}
+                  aria-describedby={formErrors.apiKey ? "api-key-error" : undefined}
                 />
+                {formErrors.apiKey && (
+                  <p id="api-key-error" className="field-error animate-fade-in">
+                    {formErrors.apiKey}
+                  </p>
+                )}
               </label>
             </div>
 
@@ -514,7 +797,9 @@ export default function Home() {
             <button
               type="submit"
               disabled={isLoading}
-              className="mt-2 btn-gradient shimmer-sweep relative h-12 rounded-xl text-sm font-bold tracking-wide"
+              className={`mt-2 btn-gradient shimmer-sweep relative h-12 rounded-xl text-sm font-bold tracking-wide ${
+                isLoading ? "is-searching" : ""
+              }`}
               style={{
                 boxShadow: isLoading
                   ? "none"
@@ -522,12 +807,17 @@ export default function Home() {
               }}
             >
               {isLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span
-                    className="inline-block h-4 w-4 rounded-full border-2 border-current border-t-transparent"
-                    style={{ animation: "spin-slow 0.8s linear infinite" }}
-                  />
-                  Searching…
+                <span className="flex items-center justify-center gap-2.5">
+                  <span className="search-loader" aria-hidden="true">
+                    <span className="search-loader-core" />
+                    <span className="search-loader-ring" />
+                  </span>
+                  <span className="flex flex-col items-start leading-none">
+                    <span>Searching...</span>
+                    <span className="text-[10px] font-semibold text-black/65">
+                      {loadingMessages[loadingStep]}
+                    </span>
+                  </span>
                 </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
@@ -535,6 +825,90 @@ export default function Home() {
                 </span>
               )}
             </button>
+
+            {captchaUrl && (
+              <div
+                className="mt-1 flex flex-col gap-3 rounded-xl border p-4"
+                style={{
+                  borderColor: "hsl(var(--accent-violet) / 0.28)",
+                  background: "hsl(var(--accent-violet) / 0.08)",
+                }}
+              >
+                <p
+                  className="text-xs leading-relaxed"
+                  style={{ color: "hsl(var(--fg-muted))" }}
+                >
+                  Google asked for human verification. Open the CAPTCHA page, complete it, then return here.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={openCaptchaChallenge}
+                    className="rounded-lg border px-3 py-2 text-xs font-semibold"
+                    style={{
+                      borderColor: "hsl(var(--accent-cyan) / 0.35)",
+                      color: "hsl(var(--accent-cyan))",
+                      background: "hsl(var(--accent-cyan) / 0.08)",
+                    }}
+                  >
+                    Open CAPTCHA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void retryAfterCaptcha()}
+                    disabled={isLoading}
+                    className="rounded-lg border px-3 py-2 text-xs font-semibold"
+                    style={{
+                      borderColor: "hsl(var(--accent-indigo) / 0.35)",
+                      color: "hsl(var(--accent-indigo))",
+                      background: "hsl(var(--accent-indigo) / 0.08)",
+                    }}
+                  >
+                    {isRetryingCaptcha ? "Checking..." : "I've Completed Verification"}
+                  </button>
+                </div>
+                <label className="flex flex-col gap-2">
+                  <span
+                    className="text-[11px] font-semibold uppercase tracking-[0.08em]"
+                    style={{ color: "hsl(var(--fg-muted))" }}
+                  >
+                    Google Cookie
+                  </span>
+                  <textarea
+                    value={googleCookie}
+                    onChange={(event) => {
+                      setGoogleCookie(event.target.value);
+                      clearFieldError("googleCookie");
+                    }}
+                    className={`input-glow min-h-[74px] rounded-lg border px-3 py-2 font-mono text-[11px] leading-5 text-white outline-none ${
+                      formErrors.googleCookie ? "input-invalid" : ""
+                    }`}
+                    style={{
+                      background: "hsl(var(--input-bg))",
+                      borderColor: "hsl(var(--border-color) / 0.5)",
+                    }}
+                    placeholder="NID=...; 1P_JAR=...; CONSENT=..."
+                    aria-invalid={formErrors.googleCookie ? true : undefined}
+                    aria-describedby={
+                      formErrors.googleCookie ? "google-cookie-error" : undefined
+                    }
+                  />
+                  {formErrors.googleCookie && (
+                    <p id="google-cookie-error" className="field-error animate-fade-in">
+                      {formErrors.googleCookie}
+                    </p>
+                  )}
+                </label>
+                {isWaitingForCaptcha && (
+                  <p
+                    className="text-[11px]"
+                    style={{ color: "hsl(var(--fg-subtle))" }}
+                  >
+                    CAPTCHA tab is open. We&apos;ll retry automatically when that tab closes.
+                  </p>
+                )}
+              </div>
+            )}
           </form>
 
           {/* ═══ RIGHT: JSON Response Panel ═══ */}
@@ -566,6 +940,11 @@ export default function Home() {
               </div>
 
               <div className="flex items-center gap-2">
+                {isLoading && (
+                  <span className="response-live-indicator" aria-live="polite">
+                    Processing
+                  </span>
+                )}
                 {/* Metadata badges */}
                 {elapsedMs !== null && (
                   <span
@@ -623,9 +1002,16 @@ export default function Home() {
             {/* JSON body */}
             <div
               ref={responseRef}
-              className="custom-scrollbar min-h-0 flex-1 overflow-auto"
+              className="custom-scrollbar relative min-h-0 flex-1 overflow-auto"
               style={{ background: "hsl(222 50% 3.5%)" }}
             >
+              {isLoading && (
+                <div className="response-loading-overlay pointer-events-none">
+                  <div className="response-loading-track">
+                    <span className="response-loading-beam" />
+                  </div>
+                </div>
+              )}
               <pre className="p-5 font-mono text-xs leading-7">
                 <SyntaxHighlightedJson json={responseJson} />
               </pre>

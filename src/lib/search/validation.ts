@@ -35,12 +35,14 @@ export function parseSearchRequest(
 
   const engines = parseEngines(engineParam);
   const limit = parseLimit(searchParams.get("limit"), defaultLimit);
+  const googleCookie = searchParams.get("google_cookie")?.trim() || undefined;
 
   return {
     query,
     type: typeValue as SearchType,
     engines,
     limit,
+    ...(googleCookie ? { googleCookie } : {}),
   };
 }
 

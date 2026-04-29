@@ -137,11 +137,12 @@ describe("GET /api/search", () => {
 
     expect(response.status).toBe(200);
     expect(body.results).toHaveLength(0);
-    expect(body.warnings[0]).toMatchObject({
+    expect(body.errors[0]).toMatchObject({
       engine: "bing",
       code: "blocked",
       status: 429,
     });
+    expect(body.warnings).toEqual([]);
   });
 
   it("returns timeout warnings without failing the whole request", async () => {
@@ -158,9 +159,93 @@ describe("GET /api/search", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.warnings[0]).toMatchObject({
+    expect(body.errors[0]).toMatchObject({
       engine: "bing",
       code: "timeout",
     });
+    expect(body.warnings).toEqual([]);
+  });
+
+  it("returns parse errors when Google image markup cannot be parsed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html><body>unexpected markup</body></html>")),
+    );
+
+    const response = await GET(
+      request("/api/search?q=mount+everest&type=image&engine=google&limit=10"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.results).toHaveLength(0);
+    expect(body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          engine: "google",
+          code: "parse_error",
+        }),
+      ]),
+    );
+    expect(body.warnings).toEqual([]);
+  });
+
+  it("returns blocked errors when Google serves a challenge page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            `
+              <html>
+                <body>
+                  <div>If you're having trouble accessing Google Search, please click here.</div>
+                  <a href="/search?q=mount+everest&emsg=SG_REL">retry</a>
+                </body>
+              </html>
+            `,
+          ),
+      ),
+    );
+
+    const response = await GET(
+      request("/api/search?q=mount+everest&type=image&engine=google&limit=10"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.results).toHaveLength(0);
+    expect(body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          engine: "google",
+          code: "blocked",
+        }),
+      ]),
+    );
+    expect(body.captcha_required).toBe(true);
+    expect(body.captchaUrl).toMatch(/^https:\/\/www\.google\.com\//);
+    expect(body.warnings).toEqual([]);
+  });
+
+  it("returns partial_results warning for partial successful responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(bingHtml, { status: 200 })),
+    );
+
+    const response = await GET(request("/api/search?q=alpha&engine=bing&limit=10"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.returned).toBe(1);
+    expect(body.errors).toEqual([]);
+    expect(body.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "partial_results",
+        }),
+      ]),
+    );
   });
 });

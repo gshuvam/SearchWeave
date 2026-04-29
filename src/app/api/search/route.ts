@@ -19,22 +19,53 @@ export async function GET(request: Request) {
       new URL(request.url).searchParams,
       config.defaultLimit,
     );
+    const requestTimeoutMs = config.interactiveCaptchaEnabled
+      ? Math.max(
+          config.timeoutMs,
+          config.interactiveCaptchaTimeoutMs + 10_000,
+        )
+      : config.timeoutMs;
+    const googleCookieHeader = request.headers.get("x-google-cookie")?.trim();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
     try {
       const search = await executeSearch(searchRequest, {
+        browserFallbackEnabled: config.browserFallbackEnabled,
+        browserTimeoutMs: config.browserTimeoutMs,
+        interactiveCaptchaEnabled: config.interactiveCaptchaEnabled,
+        interactiveCaptchaTimeoutMs: config.interactiveCaptchaTimeoutMs,
         signal: controller.signal,
-        deadline: Date.now() + config.timeoutMs,
+        deadline: Date.now() + requestTimeoutMs,
+        googleCookie: googleCookieHeader || searchRequest.googleCookie,
         userAgent: config.userAgent,
       });
-      const warnings = [...search.warnings];
-      if (search.results.length < searchRequest.limit) {
+      const errors = search.warnings.filter(
+        (warning) => warning.code !== "partial_results",
+      );
+      const warnings = search.warnings.filter(
+        (warning) => warning.code === "partial_results",
+      );
+      if (
+        search.results.length > 0 &&
+        search.results.length < searchRequest.limit
+      ) {
         warnings.push({
-          code: "parse_error",
+          code: "partial_results",
           message: `Collected ${search.results.length} results out of requested ${searchRequest.limit}. Some engines may limit or throttle pagination.`,
         });
       }
+      const captchaError = errors.find((warning) => {
+        return (
+          warning.code === "blocked" &&
+          warning.details !== undefined &&
+          typeof warning.details.captchaUrl === "string"
+        );
+      });
+      const captchaUrl =
+        captchaError && captchaError.details
+          ? String(captchaError.details.captchaUrl)
+          : null;
 
       return json(
         {
@@ -44,6 +75,9 @@ export async function GET(request: Request) {
           requestedLimit: searchRequest.limit,
           returned: search.results.length,
           results: search.results,
+          captcha_required: captchaUrl !== null,
+          captchaUrl,
+          errors,
           warnings,
           elapsedMs: Date.now() - startedAt,
         },

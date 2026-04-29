@@ -112,6 +112,19 @@ describe("search parsers", () => {
     });
   });
 
+  it("ignores Google thumbnail-only fallback images", () => {
+    const results = parseGoogleImages(`
+      <html>
+        <body>
+          <img src="https://www.google.com/images/branding/searchlogo/1x/googlelogo_hp_white_color_269x95dp.png" />
+          <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:abc123" />
+        </body>
+      </html>
+    `);
+
+    expect(results).toHaveLength(0);
+  });
+
   it("parses Brave text results", () => {
     const [result] = parseBraveText(fixture("brave-text.html"));
     expect(result).toMatchObject({

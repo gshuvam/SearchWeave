@@ -10,7 +10,15 @@ import type {
 
 type ExecuteSearchOptions = Pick<
   ScrapeContext,
-  "deadline" | "fetcher" | "signal" | "userAgent"
+  | "browserFallbackEnabled"
+  | "browserTimeoutMs"
+  | "deadline"
+  | "fetcher"
+  | "googleCookie"
+  | "interactiveCaptchaEnabled"
+  | "interactiveCaptchaTimeoutMs"
+  | "signal"
+  | "userAgent"
 >;
 
 export async function executeSearch(

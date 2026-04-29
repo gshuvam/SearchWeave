@@ -159,6 +159,27 @@ body {
   50% { border-color: transparent; }
 }
 
+@keyframes loader-ring {
+  0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.2; }
+  65% { transform: translate(-50%, -50%) scale(1.35); opacity: 0.55; }
+  100% { transform: translate(-50%, -50%) scale(1.75); opacity: 0; }
+}
+
+@keyframes loader-core {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
+@keyframes response-loading-shift {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(250%); }
+}
+
+@keyframes shimmer-soft {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
 /* ═══════════════════════════════════════════
    UTILITY CLASSES (Tailwind v4 @utility)
    ═══════════════════════════════════════════ */
@@ -251,6 +272,10 @@ body {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.btn-gradient.is-searching {
+  background: linear-gradient(135deg, hsl(185 90% 60%), hsl(170 78% 56%));
 }
 
 /* Card hover lift */
@@ -366,6 +391,129 @@ body {
   box-shadow: 0 0 0 3px hsl(var(--accent-cyan) / 0.12), 0 0 20px hsl(var(--accent-cyan) / 0.08);
 }
 
+.input-invalid {
+  border-color: hsl(var(--accent-rose) / 0.6) !important;
+  box-shadow: 0 0 0 2px hsl(var(--accent-rose) / 0.16);
+}
+
+.field-error {
+  border: 1px solid hsl(var(--accent-rose) / 0.35);
+  border-radius: 0.7rem;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--accent-rose) / 0.15),
+    hsl(var(--accent-rose) / 0.08)
+  );
+  color: hsl(350 95% 78%);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 0.45rem 0.6rem;
+}
+
+.field-error-panel {
+  border: 1px solid hsl(var(--accent-rose) / 0.35);
+  border-radius: 0.85rem;
+  padding: 0.8rem 0.9rem;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--accent-rose) / 0.14),
+    hsl(var(--accent-violet) / 0.08)
+  );
+  box-shadow: 0 0 0 1px hsl(var(--accent-rose) / 0.12) inset;
+}
+
+.field-error-panel-title {
+  color: hsl(350 95% 82%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.45rem;
+  text-transform: uppercase;
+}
+
+.field-error-list {
+  color: hsl(350 80% 84%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  font-size: 12px;
+  line-height: 1.35;
+  list-style: disc;
+  margin-left: 1rem;
+}
+
+.search-loader {
+  align-items: center;
+  display: inline-flex;
+  height: 16px;
+  justify-content: center;
+  position: relative;
+  width: 16px;
+}
+
+.search-loader-core {
+  background: hsl(220 35% 8% / 0.88);
+  border-radius: 999px;
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+  animation: loader-core 0.95s ease-in-out infinite;
+}
+
+.search-loader-ring {
+  border: 1.5px solid hsl(220 35% 10% / 0.55);
+  border-radius: 999px;
+  height: 16px;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  animation: loader-ring 1.3s ease-out infinite;
+}
+
+.response-live-indicator {
+  animation: shimmer-soft 1.2s ease-in-out infinite;
+  border: 1px solid hsl(var(--accent-cyan) / 0.28);
+  border-radius: 0.45rem;
+  color: hsl(var(--accent-cyan));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.5rem;
+  text-transform: uppercase;
+}
+
+.response-loading-overlay {
+  inset: 0 auto auto 0;
+  position: absolute;
+  width: 100%;
+  z-index: 2;
+}
+
+.response-loading-track {
+  background: hsl(var(--accent-indigo) / 0.05);
+  height: 3px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.response-loading-beam {
+  animation: response-loading-shift 1.15s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--accent-cyan) / 0),
+    hsl(var(--accent-cyan) / 0.85),
+    hsl(var(--accent-indigo) / 0.9),
+    hsl(var(--accent-cyan) / 0)
+  );
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+  width: 40%;
+}
+
 /* ═══════════════════════════════════════════
    STATUS BADGE COLORS
    ═══════════════════════════════════════════ */
@@ -411,4 +559,15 @@ body {
   color: hsl(222 47% 5%);
   font-weight: 700;
   box-shadow: 0 4px 16px hsl(var(--accent-cyan) / 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

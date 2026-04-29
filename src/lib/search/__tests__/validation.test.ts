@@ -23,6 +23,17 @@ describe("search request validation", () => {
     expect(parseEngines("bing,duckduckgo,bing")).toEqual(["bing", "duckduckgo"]);
   });
 
+  it("parses google_cookie when provided", () => {
+    const parsed = parseSearchRequest(
+      new URLSearchParams(
+        "q=alpha&engine=google&google_cookie=NID%3Dabc%3B%201P_JAR%3Dxyz",
+      ),
+      50,
+    );
+
+    expect(parsed.googleCookie).toBe("NID=abc; 1P_JAR=xyz");
+  });
+
   it("rejects invalid limits", () => {
     expect(() =>
       parseSearchRequest(new URLSearchParams("q=alpha&engine=bing&limit=0"), 50),
