@@ -1,0 +1,98 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - "npm-client-v*"
+      - "npm-cli-v*"
+      - "py-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create_release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Derive release metadata
+        id: meta
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+
+          if [[ "$TAG" == npm-client-v* ]]; then
+            PACKAGE="@searchweave/client"
+            VERSION="${TAG#npm-client-v}"
+          elif [[ "$TAG" == npm-cli-v* ]]; then
+            PACKAGE="@searchweave/cli"
+            VERSION="${TAG#npm-cli-v}"
+          elif [[ "$TAG" == py-v* ]]; then
+            PACKAGE="searchweave (PyPI)"
+            VERSION="${TAG#py-v}"
+          else
+            echo "Unsupported tag: $TAG" >&2
+            exit 1
+          fi
+
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_PACKAGE: ${{ steps.meta.outputs.package }}
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '')
+            const releaseName = `${process.env.RELEASE_PACKAGE} ${process.env.RELEASE_VERSION}`
+            const body = [
+              `Automated release for \`${process.env.RELEASE_PACKAGE}\`.`,
+              '',
+              `- Tag: \`${tag}\``,
+              `- Version: \`${process.env.RELEASE_VERSION}\``,
+              `- Commit: \`${context.sha}\``,
+              '',
+              'Package publishing runs in separate publish workflows.'
+            ].join('\n')
+
+            let existingRelease = null
+            try {
+              const lookup = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              })
+              existingRelease = lookup.data
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error
+              }
+            }
+
+            if (existingRelease) {
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: tag,
+                name: releaseName,
+                body,
+                draft: false,
+                prerelease: false,
+              })
+              core.info(`Updated release for tag ${tag}`)
+            } else {
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: releaseName,
+                body,
+                draft: false,
+                prerelease: false,
+                generate_release_notes: true,
+              })
+              core.info(`Created release for tag ${tag}`)
+            }

@@ -6,6 +6,10 @@ This repository publishes three packages from Git tags:
 - npm: `@searchweave/cli` via `.github/workflows/publish-npm-cli.yml`
 - PyPI: `searchweave` via `.github/workflows/publish-py.yml`
 
+It also auto-creates a GitHub Release entry for the same tags via:
+
+- `.github/workflows/create-github-release.yml`
+
 ## 1. One-time setup
 
 ### 1.1 npm trusted publishing
@@ -55,6 +59,8 @@ git tag npm-client-vX.Y.Z
 git push origin npm-client-vX.Y.Z
 ```
 
+This also creates/updates a GitHub Release for `npm-client-vX.Y.Z`.
+
 ### 3.2 Release `@searchweave/cli`
 
 ```bash
@@ -62,12 +68,16 @@ git tag npm-cli-vX.Y.Z
 git push origin npm-cli-vX.Y.Z
 ```
 
+This also creates/updates a GitHub Release for `npm-cli-vX.Y.Z`.
+
 ### 3.3 Release `searchweave` (PyPI)
 
 ```bash
 git tag py-vX.Y.Z
 git push origin py-vX.Y.Z
 ```
+
+This also creates/updates a GitHub Release for `py-vX.Y.Z`.
 
 ## 4. What the workflows do
 
@@ -126,4 +136,3 @@ git tag npm-cli-v0.1.0
 git tag py-v0.1.0
 git push origin npm-client-v0.1.0 npm-cli-v0.1.0 py-v0.1.0
 ```
-
