@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="SearchWeave CLI ($(PlatformLabel))"
+    Manufacturer="SearchWeave"
+    Version="$(Version)"
+    UpgradeCode="$(UpgradeCode)"
+    Language="1033">
+
+    <MajorUpgrade
+      DowngradeErrorMessage="A newer version of SearchWeave CLI is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="SearchWeave CLI">
+        <Directory Id="BINFOLDER" Name="bin" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="SearchWeave CLI" Level="1">
+      <ComponentGroupRef Id="CliComponents" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="CliComponents" Directory="BINFOLDER">
+      <Component Id="CliExeComponent" Guid="*">
+        <File
+          Id="CliExeFile"
+          Source="$(CliExePath)"
+          KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

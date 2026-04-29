@@ -128,6 +128,13 @@ GitHub workflows publish all packages from one tag format:
 
 The same tag also creates/updates a single GitHub Release and attaches:
 
+- `searchweave-client-X.Y.Z.tgz`
+- `searchweave-cli-X.Y.Z.tgz`
+- `searchweave-X.Y.Z-py3-none-any.whl`
+- `searchweave-X.Y.Z.tar.gz`
 - `searchweave-cli-X.Y.Z-windows-x64.exe`
+- `searchweave-cli-X.Y.Z-windows-x86.exe`
+- `searchweave-cli-X.Y.Z-windows-x64.msi`
+- `searchweave-cli-X.Y.Z-windows-x86.msi`
 
 The workflows are set up for trusted publishing (OIDC) with npm and PyPI.

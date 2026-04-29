@@ -12,7 +12,15 @@ A single `vX.Y.Z` tag triggers:
 - npm publish: `@searchweave/cli` via `.github/workflows/publish-npm-cli.yml`
 - PyPI publish: `searchweave` via `.github/workflows/publish-py.yml`
 - GitHub Release create/update via `.github/workflows/create-github-release.yml`
-- Windows CLI asset upload: `searchweave-cli-X.Y.Z-windows-x64.exe`
+- GitHub Release asset uploads:
+  - `searchweave-client-X.Y.Z.tgz`
+  - `searchweave-cli-X.Y.Z.tgz`
+  - `searchweave-X.Y.Z-py3-none-any.whl`
+  - `searchweave-X.Y.Z.tar.gz`
+  - `searchweave-cli-X.Y.Z-windows-x64.exe`
+  - `searchweave-cli-X.Y.Z-windows-x86.exe`
+  - `searchweave-cli-X.Y.Z-windows-x64.msi`
+  - `searchweave-cli-X.Y.Z-windows-x86.msi`
 
 ## 1. One-time setup
 
@@ -61,7 +69,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-This publishes all three packages and updates one GitHub Release (`vX.Y.Z`) with the CLI `.exe` asset.
+This publishes all three packages and updates one GitHub Release (`vX.Y.Z`) with CLI `.exe` and `.msi` assets for both `x64` and `x86`.
 
 ## 4. What the workflows do
 
@@ -85,8 +93,11 @@ This publishes all three packages and updates one GitHub Release (`vX.Y.Z`) with
 
 - `.github/workflows/create-github-release.yml`
   - Creates/updates one release for the same `v*` tag
-  - Builds Windows CLI executable
-  - Uploads `searchweave-cli-X.Y.Z-windows-x64.exe` as a release asset
+  - Builds npm package tarballs (`@searchweave/client` and `@searchweave/cli`)
+  - Builds python distribution files (`.whl` and source `.tar.gz`)
+  - Builds Windows CLI executables (`x64` and `x86`)
+  - Builds Windows MSI installers (`x64` and `x86`)
+  - Uploads all built files as release assets
 
 ## 5. Verify release
 
@@ -95,7 +106,7 @@ This publishes all three packages and updates one GitHub Release (`vX.Y.Z`) with
    - npm: `@searchweave/client`
    - npm: `@searchweave/cli`
    - PyPI: `searchweave`
-3. Check GitHub Release `vX.Y.Z` includes the `.exe` asset.
+3. Check GitHub Release `vX.Y.Z` includes npm `.tgz`, python `.whl`/`.tar.gz`, and Windows `.exe`/`.msi` assets for both `x64` and `x86`.
 4. Install-test quickly:
 
 ```bash
@@ -119,6 +130,10 @@ python -m pip index versions searchweave
     - repository owner/name
     - workflow filename
     - branch/tag permissions in GitHub repo settings
+
+- Windows x86 build is slower:
+  - `@yao-pkg/pkg` may compile Node from source for `win-x86` targets when no prebuilt binary is available.
+  - Expect the `build_windows_artifacts` job to take longer for x86 than x64.
 
 ## 7. Tag example
 

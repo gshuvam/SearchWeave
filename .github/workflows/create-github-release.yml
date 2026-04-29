@@ -45,7 +45,12 @@ jobs:
               '- npm `@searchweave/cli`',
               '- PyPI `searchweave`',
               '',
-              'This release also includes the Windows CLI executable asset.'
+              'Release assets include:',
+              '- npm client tarball (`.tgz`)',
+              '- npm cli tarball (`.tgz`)',
+              '- python distribution files (`.whl` + source `.tar.gz`)',
+              '- Windows CLI executables (`.exe`, x64 + x86)',
+              '- Windows CLI installers (`.msi`, x64 + x86)',
             ].join('\n')
 
             let existingRelease = null
@@ -88,9 +93,9 @@ jobs:
               core.info(`Created release for tag ${tag}`)
             }
 
-  build_cli_exe:
+  build_release_packages:
     needs: create_release
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -102,6 +107,109 @@ jobs:
           node-version: 24.x
           cache: npm
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Python build tooling
+        run: python -m pip install --upgrade pip build
+
+      - name: Derive version from tag
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Set @searchweave/client version
+        working-directory: packages/client
+        run: npm version "$VERSION" --no-git-tag-version
+
+      - name: Set @searchweave/cli version
+        working-directory: packages/cli
+        run: npm version "$VERSION" --no-git-tag-version
+
+      - name: Pack npm artifacts
+        shell: bash
+        run: |
+          mkdir -p dist/release-assets
+          npm pack ./packages/client --pack-destination ./dist/release-assets
+          npm pack ./packages/cli --pack-destination ./dist/release-assets
+
+      - name: Apply Python version to pyproject.toml
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          version = os.environ["VERSION"]
+          pyproject = Path("python/searchweave-py/pyproject.toml")
+          lines = pyproject.read_text(encoding="utf-8").splitlines()
+          out = []
+          replaced = False
+          for line in lines:
+              if line.startswith("version = ") and not replaced:
+                  out.append(f'version = "{version}"')
+                  replaced = True
+              else:
+                  out.append(line)
+          pyproject.write_text("\n".join(out) + "\n", encoding="utf-8")
+          PY
+
+      - name: Build Python artifacts
+        run: python -m build python/searchweave-py
+
+      - name: Collect Python artifacts
+        shell: bash
+        run: cp python/searchweave-py/dist/* dist/release-assets/
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: dist/release-assets/*
+          if-no-files-found: error
+
+  build_windows_artifacts:
+    needs: create_release
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            pkg_target: node20-win-x64
+            wix_arch: x64
+            platform_label: x64
+            upgrade_code: A11E7CC9-D0F7-4C45-ABCE-6506F0F3D70A
+          - arch: x86
+            pkg_target: node20-win-x86
+            wix_arch: x86
+            platform_label: x86
+            upgrade_code: F4F94FB7-6F9B-45C7-A166-6A32AA6752D8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
       - name: Install dependencies
         run: npm ci
 
@@ -111,18 +219,98 @@ jobs:
           $version = $env:GITHUB_REF_NAME -replace "^v", ""
           "VERSION=$version" >> $env:GITHUB_ENV
 
-      - name: Build Windows CLI executable
+      - name: Configure tool paths
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          npx --yes @yao-pkg/pkg@6 packages/cli --targets node20-win-x64 --output "dist/searchweave-cli-$env:VERSION-windows-x64.exe"
+          @(
+            "C:\Program Files\Git\usr\bin",
+            "$env:USERPROFILE\.dotnet\tools"
+          ) | ForEach-Object {
+            if (Test-Path $_) {
+              $_ >> $env:GITHUB_PATH
+            }
+          }
+
+      - name: Install WiX CLI
+        shell: pwsh
+        run: dotnet tool install --global wix --version "4.*"
+
+      - name: Restore pkg cache
+        uses: actions/cache@v4
+        with:
+          path: .pkg-cache
+          key: ${{ runner.os }}-pkg-cache-${{ matrix.pkg_target }}-v1
+
+      - name: Build Windows CLI executable
+        shell: pwsh
+        env:
+          PKG_CACHE_PATH: ${{ github.workspace }}\.pkg-cache
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/release-assets | Out-Null
+          npx --yes @yao-pkg/pkg@6 packages/cli --targets ${{ matrix.pkg_target }} --output "dist/release-assets/searchweave-cli-$env:VERSION-windows-${{ matrix.arch }}.exe"
 
       - name: Smoke-test executable
         shell: pwsh
-        run: .\dist\searchweave-cli-$env:VERSION-windows-x64.exe --help
+        run: .\dist\release-assets\searchweave-cli-$env:VERSION-windows-${{ matrix.arch }}.exe --help
 
-      - name: Upload executable to GitHub Release
+      - name: Build Windows MSI installer
+        shell: pwsh
+        run: |
+          wix build `
+            packages/cli/installer/SearchWeave.CLI.wxs `
+            -arch ${{ matrix.wix_arch }} `
+            -d Version=$env:VERSION `
+            -d PlatformLabel=${{ matrix.platform_label }} `
+            -d UpgradeCode=${{ matrix.upgrade_code }} `
+            -d CliExePath="dist\release-assets\searchweave-cli-$env:VERSION-windows-${{ matrix.arch }}.exe" `
+            -out "dist\release-assets\searchweave-cli-$env:VERSION-windows-${{ matrix.arch }}.msi"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-${{ matrix.arch }}
+          path: |
+            dist/release-assets/*.exe
+            dist/release-assets/*.msi
+          if-no-files-found: error
+
+  upload_release_assets:
+    needs:
+      - build_release_packages
+      - build_windows_artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: dist/release-assets
+
+      - name: Download Windows x64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows-x64
+          path: dist/release-assets
+
+      - name: Download Windows x86 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows-x86
+          path: dist/release-assets
+
+      - name: Show collected assets
+        shell: bash
+        run: ls -lah dist/release-assets
+
+      - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/searchweave-cli-${{ env.VERSION }}-windows-x64.exe
+          files: |
+            dist/release-assets/*.tgz
+            dist/release-assets/*.whl
+            dist/release-assets/*.tar.gz
+            dist/release-assets/*.exe
+            dist/release-assets/*.msi
           overwrite_files: true
+          fail_on_unmatched_files: true
