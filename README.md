@@ -1,6 +1,11 @@
 # SearchAPI
 
-Authenticated text and image search API for Vercel. It scrapes DuckDuckGo, Bing, Google, and Brave on a best-effort basis, returns normalized JSON, and includes a small same-origin console at `/`.
+SearchWeave monorepo with:
+
+- Next.js local API server (`/api/search`)
+- npm SDK: `@searchweave/client`
+- npm CLI: `@searchweave/cli` (`searchweave`)
+- Python SDK + CLI: `searchweave` (`searchweave-py`)
 
 ## Local setup
 
@@ -9,7 +14,15 @@ npm install
 npm run dev
 ```
 
-Create `.env.local` from `.env.example`, set `SEARCH_API_KEY`, then use the console or call the API directly.
+Copy `.env.example` to `.env.local`.
+
+For local-only development without API keys:
+
+```bash
+SEARCH_ALLOW_LOCAL_NO_AUTH=true
+```
+
+With `SEARCH_ALLOW_LOCAL_NO_AUTH=true`, requests to localhost/loopback are allowed with no `Authorization` header.
 
 ## API
 
@@ -17,14 +30,6 @@ Create `.env.local` from `.env.example`, set `SEARCH_API_KEY`, then use the cons
 curl "http://localhost:3000/api/search?q=vercel&type=text&engine=duckduckgo,bing&limit=10" \
   -H "Authorization: Bearer $SEARCH_API_KEY"
 ```
-
-Query parameters:
-
-- `q`: required search keyword
-- `type`: `text` or `image`, default `text`
-- `engine`: comma-separated list from `duckduckgo,bing,google,brave`
-- `limit`: positive integer, default `SEARCH_DEFAULT_LIMIT` or `50`
-- `google_cookie`: optional Google cookie header string for CAPTCHA resume (`NID=...; 1P_JAR=...`)
 
 Response shape:
 
@@ -44,24 +49,83 @@ Response shape:
 }
 ```
 
-`errors` contains engine failures (`blocked`, `fetch_error`, `parse_error`, `timeout`, `unknown_error`).
-`warnings` contains non-fatal notices (`partial_results`) only.
-When CAPTCHA is required, the API also returns `captcha_required: true` and `captchaUrl`.
+## npm packages
 
-## Vercel environment variables
+### `@searchweave/client`
 
-- `SEARCH_API_KEY`: required API key checked against the `Authorization` bearer token.
-- `SEARCH_DEFAULT_LIMIT`: optional default result limit, defaults to `50`.
-- `SEARCH_REQUEST_TIMEOUT_MS`: optional request time budget, defaults to `25000`.
-- `SEARCH_ENABLE_BROWSER_FALLBACK`: optional (`true`/`false`), enables Puppeteer browser fallback after normal scraping fails.
-- `SEARCH_BROWSER_TIMEOUT_MS`: optional browser fallback timeout, defaults to `45000`.
-- `SEARCH_ENABLE_INTERACTIVE_CAPTCHA`: optional (`true`/`false`), when `true` launches Puppeteer in non-headless mode and waits for manual CAPTCHA solve in that browser session.
-- `SEARCH_INTERACTIVE_CAPTCHA_TIMEOUT_MS`: optional wait timeout for interactive CAPTCHA mode, defaults to `180000`.
+Programmatic SDK:
+
+```js
+import { SearchWeaveClient } from "@searchweave/client";
+
+const client = new SearchWeaveClient({
+  baseUrl: "http://127.0.0.1:3000",
+  apiKey: "", // blank is allowed for localhost only
+});
+
+const data = await client.search({
+  q: "vercel",
+  type: "text",
+  engine: "duckduckgo,bing",
+  limit: 10,
+});
+```
+
+Config precedence: explicit args > env (`SEARCH_API_BASE_URL`, `SEARCH_API_KEY`) > config file > defaults.
+
+Config file:
+
+- Windows: `%APPDATA%/SearchWeave/config.json`
+- Linux/macOS: `$XDG_CONFIG_HOME/searchweave/config.json` or `~/.config/searchweave/config.json`
+
+### `@searchweave/cli`
+
+```bash
+searchweave config init
+searchweave config set --base-url http://127.0.0.1:3000 --api-key ""
+searchweave config show
+searchweave search --q "vercel" --engine duckduckgo,bing --limit 10
+```
+
+## Python package
+
+### `searchweave` SDK
+
+```python
+from searchweave import SearchWeaveClient
+
+client = SearchWeaveClient(base_url="http://127.0.0.1:3000", api_key="")
+result = client.search(q="vercel", engine="duckduckgo,bing", limit=10)
+```
+
+### `searchweave-py` CLI
+
+```bash
+searchweave-py config init
+searchweave-py config set --base-url http://127.0.0.1:3000 --api-key ""
+searchweave-py config show
+searchweave-py search --q "vercel" --engine duckduckgo,bing --limit 10
+```
+
+## Environment variables
+
+- `SEARCH_API_KEY`: API key for server-side auth.
+- `SEARCH_ALLOW_LOCAL_NO_AUTH`: `true`/`false`; allows no-auth localhost requests when `SEARCH_API_KEY` is blank.
+- `SEARCH_DEFAULT_LIMIT`: optional default result limit, default `50`.
+- `SEARCH_REQUEST_TIMEOUT_MS`: optional request timeout, default `25000`.
+- `SEARCH_ENABLE_BROWSER_FALLBACK`: optional (`true`/`false`), enables Puppeteer fallback.
+- `SEARCH_BROWSER_TIMEOUT_MS`: optional browser fallback timeout, default `45000`.
+- `SEARCH_ENABLE_INTERACTIVE_CAPTCHA`: optional (`true`/`false`), non-headless CAPTCHA flow.
+- `SEARCH_INTERACTIVE_CAPTCHA_TIMEOUT_MS`: optional, default `180000`.
 - `SEARCH_USER_AGENT`: optional scraper user agent.
-- `SEARCH_ALLOWED_ORIGINS`: optional comma-separated origins for cross-origin API calls.
+- `SEARCH_ALLOWED_ORIGINS`: optional comma-separated CORS allow list.
 
-## Notes
+## CI and release tags
 
-Search engine scraping is inherently best-effort. Engines can change markup, block requests, or require CAPTCHA, especially from serverless infrastructure. When Google serves CAPTCHA, the API returns `errors[].details.captchaUrl` and a resume hint (`google_cookie`) so you can solve and retry.
+GitHub workflows publish packages from tags:
 
-If `SEARCH_ENABLE_INTERACTIVE_CAPTCHA=true`, Google fallback switches to an interactive browser session and waits for the CAPTCHA to be solved in that session before parsing results. Keep it `false` on Vercel/serverless and use the existing `captchaUrl` + `google_cookie` resume flow.
+- `npm-client-vX.Y.Z` -> `@searchweave/client`
+- `npm-cli-vX.Y.Z` -> `@searchweave/cli`
+- `py-vX.Y.Z` -> `searchweave` (PyPI)
+
+The workflows are set up for trusted publishing (OIDC) with npm and PyPI.

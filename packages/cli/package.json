@@ -1,0 +1,26 @@
+{
+  "name": "@searchweave/cli",
+  "version": "0.1.0",
+  "description": "SearchWeave command line interface.",
+  "type": "module",
+  "bin": {
+    "searchweave": "./bin/searchweave.js"
+  },
+  "main": "./src/main.js",
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "build": "node -e \"console.log('No build step required for @searchweave/cli')\"",
+    "test": "vitest run src/main.test.js",
+    "pack:check": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "@searchweave/client": "^0.1.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "license": "MIT"
+}

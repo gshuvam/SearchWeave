@@ -1,0 +1,44 @@
+name: Publish npm cli
+
+on:
+  push:
+    tags:
+      - "npm-cli-v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Derive version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#npm-cli-v}" >> "$GITHUB_ENV"
+
+      - name: Set package version
+        working-directory: packages/cli
+        run: npm version "$VERSION" --no-git-tag-version
+
+      - name: Run cli tests
+        run: npm run -w @searchweave/cli test
+
+      - name: Dry-run package
+        run: npm run -w @searchweave/cli pack:check
+
+      - name: Publish @searchweave/cli
+        working-directory: packages/cli
+        run: npm publish --provenance --access public

@@ -2,12 +2,19 @@
   "name": "searchapi",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:python": "python -m unittest discover -s python/searchweave-py/tests -p \"test_*.py\"",
+    "test:workspaces": "npm run test && npm run -w @searchweave/client test && npm run -w @searchweave/cli test",
+    "build:workspaces": "npm run build && npm run -w @searchweave/client build && npm run -w @searchweave/cli build",
+    "pack:check": "npm run -w @searchweave/client pack:check && npm run -w @searchweave/cli pack:check"
   },
   "dependencies": {
     "@sparticuz/chromium": "^123.0.0",

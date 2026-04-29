@@ -70,6 +70,36 @@ describe("GET /api/search", () => {
     expect(body.error.code).toBe("unauthorized");
   });
 
+  it("allows localhost requests without API key when SEARCH_ALLOW_LOCAL_NO_AUTH=true", async () => {
+    vi.stubEnv("SEARCH_API_KEY", "");
+    vi.stubEnv("SEARCH_ALLOW_LOCAL_NO_AUTH", "true");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(bingHtml, { status: 200 })),
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/search?q=alpha&engine=bing"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.results).toHaveLength(1);
+  });
+
+  it("still rejects non-localhost requests without API key", async () => {
+    vi.stubEnv("SEARCH_API_KEY", "");
+    vi.stubEnv("SEARCH_ALLOW_LOCAL_NO_AUTH", "true");
+
+    const response = await GET(
+      new Request("https://api.example.com/api/search?q=alpha&engine=bing"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error.code).toBe("unauthorized");
+  });
+
   it("uses the default limit and returns JSON results", async () => {
     vi.stubGlobal(
       "fetch",
