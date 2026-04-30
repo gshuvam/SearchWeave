@@ -54,12 +54,14 @@ export type ParsedSearchRequest = {
   type: SearchType;
   engines: SearchEngine[];
   limit: number;
+  nsfw: boolean;
   googleCookie?: string;
 };
 
 export type ScrapeContext = {
   query: string;
   limit: number;
+  nsfw: boolean;
   signal: AbortSignal;
   deadline: number;
   userAgent: string;

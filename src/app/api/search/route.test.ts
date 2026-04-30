@@ -15,6 +15,21 @@ const googleHtml = `
   </div>
 `;
 
+const duckSingleResultHtml = `
+  <div class="result">
+    <h2><a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Fduck-nsfw">Duck NSFW</a></h2>
+    <a class="result__snippet">Duck snippet.</a>
+  </div>
+`;
+
+const braveHtml = `
+  <div data-testid="web-result">
+    <h3>Brave Result</h3>
+    <a href="https://example.com/brave-nsfw">Brave Result</a>
+    <p class="snippet-description">Brave snippet.</p>
+  </div>
+`;
+
 const duckPageOneHtml = `
   <div class="result">
     <h2><a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Fduck-1">Duck 1</a></h2>
@@ -134,6 +149,50 @@ describe("GET /api/search", () => {
     expect(response.status).toBe(200);
     expect(body.results).toHaveLength(1);
     expect(body.engines).toEqual(["bing", "google"]);
+  });
+
+  it("passes unrestricted mode to all selected engines when nsfw=true", async () => {
+    const calledUrls: string[] = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = input.toString();
+        calledUrls.push(url);
+
+        if (url.includes("duckduckgo.com")) {
+          return new Response(duckSingleResultHtml, { status: 200 });
+        }
+
+        if (url.includes("bing.com")) {
+          return new Response(bingHtml, { status: 200 });
+        }
+
+        if (url.includes("google.com")) {
+          return new Response(googleHtml, { status: 200 });
+        }
+
+        if (url.includes("search.brave.com")) {
+          return new Response(braveHtml, { status: 200 });
+        }
+
+        return new Response("", { status: 404 });
+      }),
+    );
+
+    const response = await GET(
+      request("/api/search?q=alpha&engine=duckduckgo,bing,google,brave&limit=1&nsfw=true"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(calledUrls).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("kp=-2"),
+        expect.stringContaining("safeSearch=off"),
+        expect.stringContaining("safe=off"),
+        expect.stringContaining("safesearch=off"),
+      ]),
+    );
   });
 
   it("follows DuckDuckGo next-page form fields to fill the requested limit", async () => {

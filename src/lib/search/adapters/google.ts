@@ -33,9 +33,7 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
   let start = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
-    const url = `https://www.google.com/search?q=${encodeURIComponent(
-      context.query,
-    )}&num=10&hl=en&start=${start}`;
+    const url = buildGoogleTextUrl(context, start);
 
     try {
       const html = await fetchText(url, { ...context, engine });
@@ -85,9 +83,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   let start = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
-    const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
-      context.query,
-    )}&hl=en&start=${start}`;
+    const url = buildGoogleImageUrl(context, start);
 
     try {
       const html = await fetchText(url, { ...context, engine });
@@ -129,6 +125,30 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   }
 
   return { results, warnings };
+}
+
+function buildGoogleTextUrl(context: ScrapeContext, start: number) {
+  const params = new URLSearchParams({
+    q: context.query,
+    num: "10",
+    hl: "en",
+    start: String(start),
+    ...(context.nsfw ? { safe: "off" } : {}),
+  });
+
+  return `https://www.google.com/search?${params.toString()}`;
+}
+
+function buildGoogleImageUrl(context: ScrapeContext, start: number) {
+  const params = new URLSearchParams({
+    tbm: "isch",
+    q: context.query,
+    hl: "en",
+    start: String(start),
+    ...(context.nsfw ? { safe: "off" } : {}),
+  });
+
+  return `https://www.google.com/search?${params.toString()}`;
 }
 
 function createGoogleParseWarning(

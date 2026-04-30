@@ -24,9 +24,7 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
   let first = 1;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
-    const url = `https://www.bing.com/search?q=${encodeURIComponent(
-      context.query,
-    )}&first=${first}`;
+    const url = buildBingTextUrl(context, first);
 
     try {
       const html = await fetchText(url, { ...context, engine });
@@ -50,9 +48,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   let first = 1;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
-    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(
-      context.query,
-    )}&first=${first}`;
+    const url = buildBingImageUrl(context, first);
 
     try {
       const html = await fetchText(url, { ...context, engine });
@@ -68,6 +64,26 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   }
 
   return { results, warnings };
+}
+
+function buildBingTextUrl(context: ScrapeContext, first: number) {
+  const params = new URLSearchParams({
+    q: context.query,
+    first: String(first),
+    ...(context.nsfw ? { safeSearch: "off" } : {}),
+  });
+
+  return `https://www.bing.com/search?${params.toString()}`;
+}
+
+function buildBingImageUrl(context: ScrapeContext, first: number) {
+  const params = new URLSearchParams({
+    q: context.query,
+    first: String(first),
+    ...(context.nsfw ? { safeSearch: "off" } : {}),
+  });
+
+  return `https://www.bing.com/images/search?${params.toString()}`;
 }
 
 export function parseBingText(html: string): TextSearchResult[] {

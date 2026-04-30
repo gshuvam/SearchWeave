@@ -66,6 +66,7 @@ async function runEngine(
   const context: ScrapeContext = {
     query: request.query,
     limit: request.limit,
+    nsfw: request.nsfw,
     ...options,
   };
 

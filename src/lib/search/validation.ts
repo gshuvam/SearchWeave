@@ -35,6 +35,7 @@ export function parseSearchRequest(
 
   const engines = parseEngines(engineParam);
   const limit = parseLimit(searchParams.get("limit"), defaultLimit);
+  const nsfw = parseBooleanParam(searchParams.get("nsfw"), "nsfw");
   const googleCookie = searchParams.get("google_cookie")?.trim() || undefined;
 
   return {
@@ -42,6 +43,7 @@ export function parseSearchRequest(
     type: typeValue as SearchType,
     engines,
     limit,
+    nsfw,
     ...(googleCookie ? { googleCookie } : {}),
   };
 }
@@ -84,4 +86,28 @@ export function parseLimit(value: string | null, defaultLimit: number): number {
   }
 
   return parsed;
+}
+
+function parseBooleanParam(
+  value: string | null,
+  field: string,
+): boolean {
+  if (value === null || value.trim() === "") {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  throw new SearchApiError(
+    400,
+    `invalid_${field}`,
+    `${field} must be a boolean (true/false).`,
+  );
 }

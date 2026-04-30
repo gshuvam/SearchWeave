@@ -30,9 +30,7 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
   let offset = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
-    const url = `https://search.brave.com/search?q=${encodeURIComponent(
-      context.query,
-    )}&offset=${offset}`;
+    const url = buildBraveTextUrl(context, offset);
 
     try {
       const html = await fetchText(url, { ...context, engine });
@@ -56,9 +54,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   let offset = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
-    const url = `https://search.brave.com/images?q=${encodeURIComponent(
-      context.query,
-    )}&offset=${offset}`;
+    const url = buildBraveImageUrl(context, offset);
 
     try {
       const html = await fetchText(url, { ...context, engine });
@@ -74,6 +70,26 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   }
 
   return { results, warnings };
+}
+
+function buildBraveTextUrl(context: ScrapeContext, offset: number) {
+  const params = new URLSearchParams({
+    q: context.query,
+    offset: String(offset),
+    ...(context.nsfw ? { safesearch: "off" } : {}),
+  });
+
+  return `https://search.brave.com/search?${params.toString()}`;
+}
+
+function buildBraveImageUrl(context: ScrapeContext, offset: number) {
+  const params = new URLSearchParams({
+    q: context.query,
+    offset: String(offset),
+    ...(context.nsfw ? { safesearch: "off" } : {}),
+  });
+
+  return `https://search.brave.com/images?${params.toString()}`;
 }
 
 export function parseBraveText(html: string): TextSearchResult[] {

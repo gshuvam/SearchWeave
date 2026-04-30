@@ -72,6 +72,7 @@ export async function GET(request: Request) {
           query: searchRequest.query,
           type: searchRequest.type,
           engines: searchRequest.engines,
+          nsfw: searchRequest.nsfw,
           requestedLimit: searchRequest.limit,
           returned: search.results.length,
           results: search.results,

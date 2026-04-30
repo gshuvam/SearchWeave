@@ -16,6 +16,7 @@ describe("search request validation", () => {
       type: "text",
       engines: ["duckduckgo", "bing"],
       limit: 50,
+      nsfw: false,
     });
   });
 
@@ -32,6 +33,22 @@ describe("search request validation", () => {
     );
 
     expect(parsed.googleCookie).toBe("NID=abc; 1P_JAR=xyz");
+    expect(parsed.nsfw).toBe(false);
+  });
+
+  it("parses nsfw when enabled", () => {
+    const parsed = parseSearchRequest(
+      new URLSearchParams("q=alpha&engine=bing&nsfw=true"),
+      50,
+    );
+
+    expect(parsed.nsfw).toBe(true);
+  });
+
+  it("rejects invalid nsfw values", () => {
+    expect(() =>
+      parseSearchRequest(new URLSearchParams("q=alpha&engine=bing&nsfw=maybe"), 50),
+    ).toThrow(SearchApiError);
   });
 
   it("rejects invalid limits", () => {

@@ -39,7 +39,7 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
     try {
       const attemptResponse = await crawlDuckDuckGoTextAttempt(
         context,
-        `${DUCKDUCKGO_LITE_URL}?q=${encodeURIComponent(context.query)}`,
+        buildDuckDuckGoTextUrl(context.query, context.nsfw, DUCKDUCKGO_LITE_URL),
         DUCKDUCKGO_LITE_URL,
       );
       mergeUnique(results, attemptResponse.results, context.limit);
@@ -64,7 +64,7 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
     try {
       const fallbackResponse = await crawlDuckDuckGoTextAttempt(
         context,
-        `${DUCKDUCKGO_HTML_URL}?q=${encodeURIComponent(context.query)}`,
+        buildDuckDuckGoTextUrl(context.query, context.nsfw, DUCKDUCKGO_HTML_URL),
         DUCKDUCKGO_HTML_URL,
       );
       mergeUnique(results, fallbackResponse.results, context.limit);
@@ -173,9 +173,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
 
   try {
     const html = await fetchText(
-      `https://duckduckgo.com/?q=${encodeURIComponent(
-        context.query,
-      )}&iax=images&ia=images`,
+      buildDuckDuckGoImageBootstrapUrl(context),
       { ...context, engine },
     );
     const vqd = extractDuckDuckGoVqd(html);
@@ -199,9 +197,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
     while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
       const url =
         nextUrl ??
-        `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(
-          context.query,
-        )}&vqd=${encodeURIComponent(vqd)}&f=,,,&p=1&s=${offset}`;
+        buildDuckDuckGoImageApiUrl(context, vqd, offset);
 
       const jsonText = await fetchText(url, { ...context, engine });
       const parsedResponse = JSON.parse(jsonText) as DuckDuckGoImageApiResponse;
@@ -225,6 +221,46 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   }
 
   return { results, warnings };
+}
+
+function buildDuckDuckGoTextUrl(query: string, nsfw: boolean, baseUrl: string) {
+  const params = new URLSearchParams({
+    q: query,
+    ...(nsfw ? { kp: "-2" } : {}),
+  });
+
+  return `${baseUrl}?${params.toString()}`;
+}
+
+function buildDuckDuckGoImageBootstrapUrl(context: ScrapeContext) {
+  const params = new URLSearchParams({
+    q: context.query,
+    iax: "images",
+    ia: "images",
+    ...(context.nsfw ? { kp: "-2" } : {}),
+  });
+
+  return `https://duckduckgo.com/?${params.toString()}`;
+}
+
+function buildDuckDuckGoImageApiUrl(
+  context: ScrapeContext,
+  vqd: string,
+  offset: number,
+) {
+  const safeValue = context.nsfw ? "-2" : "1";
+  const params = new URLSearchParams({
+    l: "us-en",
+    o: "json",
+    q: context.query,
+    vqd,
+    f: ",,,",
+    p: safeValue,
+    s: String(offset),
+    ...(context.nsfw ? { kp: "-2" } : {}),
+  });
+
+  return `https://duckduckgo.com/i.js?${params.toString()}`;
 }
 
 export function parseDuckDuckGoText(html: string): TextSearchResult[] {

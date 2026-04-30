@@ -124,6 +124,7 @@ export default function Home() {
   const [selectedEngines, setSelectedEngines] = useState<string[]>([
     "duckduckgo",
   ]);
+  const [includeNsfw, setIncludeNsfw] = useState(false);
   const [limit, setLimit] = useState("50");
   const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -153,6 +154,7 @@ export default function Home() {
           type: "text",
           engine: "duckduckgo",
           limit: 50,
+          nsfw: false,
         },
         features: [
           "Multi-engine parallel crawling",
@@ -220,6 +222,9 @@ export default function Home() {
 
     if (limit.trim()) {
       params.set("limit", limit.trim());
+    }
+    if (includeNsfw) {
+      params.set("nsfw", "true");
     }
     if (googleCookie.trim()) {
       params.set("google_cookie", googleCookie.trim());
@@ -730,6 +735,36 @@ export default function Home() {
                 </p>
               )}
             </fieldset>
+
+            <label
+              className="flex items-start gap-3 rounded-xl border px-3.5 py-3"
+              style={{
+                background: includeNsfw
+                  ? "hsl(var(--accent-violet) / 0.08)"
+                  : "hsl(var(--input-bg))",
+                borderColor: includeNsfw
+                  ? "hsl(var(--accent-violet) / 0.35)"
+                  : "hsl(var(--border-color) / 0.4)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={includeNsfw}
+                onChange={(event) => setIncludeNsfw(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border"
+                style={{
+                  accentColor: "hsl(var(--accent-violet))",
+                }}
+              />
+              <span className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(var(--fg-muted))" }}>
+                  Include NSFW (18+)
+                </span>
+                <span className="text-[11px]" style={{ color: "hsl(var(--fg-subtle))" }}>
+                  Sends unrestricted search mode to all selected engines.
+                </span>
+              </span>
+            </label>
 
             {/* Limit + API Key row */}
             <div className="grid grid-cols-2 gap-4">
