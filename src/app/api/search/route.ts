@@ -19,12 +19,20 @@ export async function GET(request: Request) {
       new URL(request.url).searchParams,
       config.defaultLimit,
     );
-    const requestTimeoutMs = config.interactiveCaptchaEnabled
+    const baseTimeoutMs = config.interactiveCaptchaEnabled
       ? Math.max(
           config.timeoutMs,
           config.interactiveCaptchaTimeoutMs + 10_000,
         )
       : config.timeoutMs;
+    // Scale the deadline with how many results are requested: each additional
+    // 10 results beyond the first page needs roughly one extra network round-
+    // trip (~1 s). Cap at 3× the base to avoid unbounded waits.
+    const extraMs = Math.floor(searchRequest.limit / 10) * 1_000;
+    const requestTimeoutMs = Math.min(
+      baseTimeoutMs + extraMs,
+      baseTimeoutMs * 3,
+    );
     const googleCookieHeader = request.headers.get("x-google-cookie")?.trim();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);

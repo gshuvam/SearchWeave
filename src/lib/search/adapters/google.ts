@@ -31,6 +31,7 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
   const results: TextSearchResult[] = [];
   const warnings: SearchWarning[] = [];
   let start = 0;
+  let consecutiveNoNew = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
     const url = buildGoogleTextUrl(context, start);
@@ -70,8 +71,14 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
         }
         break;
       }
-      if (mergeUnique(results, parsed, context.limit) === 0) {
-        break;
+      const added = mergeUnique(results, parsed, context.limit);
+      if (added === 0) {
+        consecutiveNoNew += 1;
+        if (consecutiveNoNew >= 2) {
+          break;
+        }
+      } else {
+        consecutiveNoNew = 0;
       }
       start += 10;
     } catch (error) {
@@ -87,6 +94,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   const results: ImageSearchResult[] = [];
   const warnings: SearchWarning[] = [];
   let start = 0;
+  let consecutiveNoNew = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
     const url = buildGoogleImageUrl(context, start);
@@ -126,8 +134,14 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
         }
         break;
       }
-      if (mergeUnique(results, parsed, context.limit) === 0) {
-        break;
+      const added = mergeUnique(results, parsed, context.limit);
+      if (added === 0) {
+        consecutiveNoNew += 1;
+        if (consecutiveNoNew >= 2) {
+          break;
+        }
+      } else {
+        consecutiveNoNew = 0;
       }
       start += 20;
     } catch (error) {
