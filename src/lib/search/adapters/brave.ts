@@ -28,6 +28,7 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
   const results: TextSearchResult[] = [];
   const warnings = [];
   let offset = 0;
+  let consecutiveNoNew = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
     const url = buildBraveTextUrl(context, offset);
@@ -35,8 +36,17 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
     try {
       const html = await fetchText(url, { ...context, engine });
       const parsed = parseBraveText(html);
-      if (parsed.length === 0 || mergeUnique(results, parsed, context.limit) === 0) {
+      if (parsed.length === 0) {
         break;
+      }
+      const added = mergeUnique(results, parsed, context.limit);
+      if (added === 0) {
+        consecutiveNoNew += 1;
+        if (consecutiveNoNew >= 2) {
+          break;
+        }
+      } else {
+        consecutiveNoNew = 0;
       }
       offset += 10;
     } catch (error) {
@@ -52,6 +62,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
   const results: ImageSearchResult[] = [];
   const warnings = [];
   let offset = 0;
+  let consecutiveNoNew = 0;
 
   while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
     const url = buildBraveImageUrl(context, offset);
@@ -59,8 +70,17 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
     try {
       const html = await fetchText(url, { ...context, engine });
       const parsed = parseBraveImages(html);
-      if (parsed.length === 0 || mergeUnique(results, parsed, context.limit) === 0) {
+      if (parsed.length === 0) {
         break;
+      }
+      const added = mergeUnique(results, parsed, context.limit);
+      if (added === 0) {
+        consecutiveNoNew += 1;
+        if (consecutiveNoNew >= 2) {
+          break;
+        }
+      } else {
+        consecutiveNoNew = 0;
       }
       offset += 20;
     } catch (error) {

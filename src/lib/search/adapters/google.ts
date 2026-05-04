@@ -47,11 +47,17 @@ async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse
         );
 
         if (fallback.results.length > 0) {
-          mergeUnique(results, fallback.results, context.limit);
+          const added = mergeUnique(results, fallback.results, context.limit);
           if (fallback.warning) {
             warnings.push(fallback.warning);
           }
-          break;
+          if (added === 0 || results.length >= context.limit) {
+            break;
+          }
+          // Browser fallback gave us some results but we still need more —
+          // advance the cursor and try the next page via the normal path.
+          start += 10;
+          continue;
         }
 
         if (fallback.warning) {
@@ -97,11 +103,17 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
         );
 
         if (fallback.results.length > 0) {
-          mergeUnique(results, fallback.results, context.limit);
+          const added = mergeUnique(results, fallback.results, context.limit);
           if (fallback.warning) {
             warnings.push(fallback.warning);
           }
-          break;
+          if (added === 0 || results.length >= context.limit) {
+            break;
+          }
+          // Browser fallback gave us some results but we still need more —
+          // advance the cursor and try the next page via the normal path.
+          start += 20;
+          continue;
         }
 
         if (fallback.warning) {

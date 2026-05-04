@@ -29,46 +29,33 @@ export const duckDuckGoAdapter: SearchAdapter = {
 async function searchText(context: ScrapeContext): Promise<AdapterSearchResponse> {
   const results: TextSearchResult[] = [];
   const warnings = [];
-  const maxAttempts = 4;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    if (results.length >= context.limit || !hasTimeRemaining(context.deadline)) {
-      break;
-    }
-
+  // Primary crawl: follow all next-page forms on the lite endpoint.
+  if (hasTimeRemaining(context.deadline)) {
     try {
-      const attemptResponse = await crawlDuckDuckGoTextAttempt(
+      const liteResponse = await crawlDuckDuckGoTextAttempt(
         context,
         buildDuckDuckGoTextUrl(context.query, context.nsfw, DUCKDUCKGO_LITE_URL),
         DUCKDUCKGO_LITE_URL,
       );
-      mergeUnique(results, attemptResponse.results, context.limit);
-      warnings.push(...attemptResponse.warnings);
-
-      if (attemptResponse.results.length === 0) {
-        break;
-      }
+      mergeUnique(results, liteResponse.results, context.limit);
+      warnings.push(...liteResponse.warnings);
     } catch (error) {
       warnings.push(warningFromError(engine, error));
-      break;
-    }
-
-    if (results.length < context.limit && attempt < maxAttempts) {
-      await sleep(200);
     }
   }
 
-  // Rescue path for occasional zero-result lite responses:
-  // retry once against the html endpoint before returning empty.
-  if (results.length === 0 && hasTimeRemaining(context.deadline)) {
+  // Supplement: crawl the html endpoint to pick up additional unique results
+  // (or as a rescue when the lite endpoint returned nothing).
+  if (results.length < context.limit && hasTimeRemaining(context.deadline)) {
     try {
-      const fallbackResponse = await crawlDuckDuckGoTextAttempt(
+      const htmlResponse = await crawlDuckDuckGoTextAttempt(
         context,
         buildDuckDuckGoTextUrl(context.query, context.nsfw, DUCKDUCKGO_HTML_URL),
         DUCKDUCKGO_HTML_URL,
       );
-      mergeUnique(results, fallbackResponse.results, context.limit);
-      warnings.push(...fallbackResponse.warnings);
+      mergeUnique(results, htmlResponse.results, context.limit);
+      warnings.push(...htmlResponse.warnings);
     } catch (error) {
       warnings.push(warningFromError(engine, error));
     }
@@ -161,11 +148,6 @@ function serializeCookieJar(cookieJar: Map<string, string>) {
     .join("; ");
 }
 
-function sleep(milliseconds: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
-}
 
 async function searchImages(context: ScrapeContext): Promise<AdapterSearchResponse> {
   const results: ImageSearchResult[] = [];
@@ -193,6 +175,7 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
 
     let offset = 0;
     let nextUrl: string | null = null;
+    let consecutiveNoNew = 0;
 
     while (results.length < context.limit && hasTimeRemaining(context.deadline)) {
       const url =
@@ -203,18 +186,28 @@ async function searchImages(context: ScrapeContext): Promise<AdapterSearchRespon
       const parsedResponse = JSON.parse(jsonText) as DuckDuckGoImageApiResponse;
       const parsed = parseDuckDuckGoImages(parsedResponse);
 
-      if (parsed.length === 0 || mergeUnique(results, parsed, context.limit) === 0) {
+      if (parsed.length === 0) {
         break;
       }
 
+      const added = mergeUnique(results, parsed, context.limit);
+      if (added === 0) {
+        // All results on this page were duplicates — stop to avoid an
+        // infinite loop when the API cycles back to already-seen images.
+        consecutiveNoNew += 1;
+        if (consecutiveNoNew >= 2) {
+          break;
+        }
+      } else {
+        consecutiveNoNew = 0;
+      }
+
+      // Prefer the API-supplied next URL; fall back to offset-based pagination
+      // so we keep fetching even when the API omits the 'next' field.
       nextUrl = parsedResponse.next
         ? toAbsoluteUrl(parsedResponse.next, "https://duckduckgo.com")
         : null;
       offset += parsed.length;
-
-      if (!nextUrl && parsed.length === 0) {
-        break;
-      }
     }
   } catch (error) {
     warnings.push(warningFromError(engine, error));
